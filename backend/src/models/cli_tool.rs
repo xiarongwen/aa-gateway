@@ -43,7 +43,7 @@ impl CliToolType {
 
     pub fn config_path(&self) -> &'static str {
         match self {
-            CliToolType::ClaudeCode => "~/.claude/settings.json",
+            CliToolType::ClaudeCode => "~/.claude.json",
             CliToolType::Codex => "~/.codex/config.json",
             CliToolType::GeminiCli => "~/.gemini/config.json",
             CliToolType::OpenCode => "~/.opencode/config.json",
@@ -167,8 +167,12 @@ impl CliTool {
     }
 
     fn generate_claude_code_config(&self) -> anyhow::Result<CliToolConfigOutput> {
-        // Claude Code 使用 settings.json 格式
+        // Claude Code 使用 ~/.claude.json 格式
+        // 支持自定义 API 配置
         let config = serde_json::json!({
+            "anthropicApiKey": self.api_key,
+            "anthropicBaseUrl": self.api_url,
+            "defaultModel": self.model,
             "apiKey": self.api_key,
             "apiUrl": self.api_url,
             "model": self.model,
@@ -178,7 +182,10 @@ impl CliTool {
             tool_type: self.tool_type.clone(),
             config_path: CliToolType::ClaudeCode.config_path().to_string(),
             config_content: serde_json::to_string_pretty(&config)?,
-            env_vars: None,
+            env_vars: Some(vec![
+                ("ANTHROPIC_API_KEY".to_string(), self.api_key.clone()),
+                ("ANTHROPIC_BASE_URL".to_string(), self.api_url.clone()),
+            ]),
         })
     }
 

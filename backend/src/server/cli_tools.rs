@@ -349,7 +349,7 @@ async fn list_cli_tool_types() -> Json<ApiResponse<Vec<serde_json::Value>>> {
             "id": "claude_code",
             "name": "Claude Code",
             "description": "Claude Code CLI - Anthropic's AI coding assistant",
-            "config_path": "~/.claude/settings.json"
+            "config_path": "~/.claude.json"
         }),
         serde_json::json!({
             "id": "codex",
@@ -571,6 +571,13 @@ async fn apply_cli_tool_config(
         )));
     }
 
+    // 写入环境变量到 shell 配置文件
+    if let Some(env_vars) = &config.env_vars {
+        if let Err(e) = write_env_vars_to_shell_config(env_vars) {
+            tracing::warn!("Failed to write env vars to shell config: {}", e);
+        }
+    }
+
     // 更新数据库中的启用状态
     if let Err(e) = conn.execute(
         "UPDATE cli_tools SET enabled = TRUE, updated_at = ? WHERE id = ?",
@@ -587,12 +594,84 @@ async fn apply_cli_tool_config(
         tracing::warn!("Failed to disable other configs: {}", e);
     }
 
+    // 获取 shell 配置文件路径用于响应
+    let shell_config_path = get_shell_config_path();
+
     Json(ApiResponse::success(serde_json::json!({
         "message": "Configuration applied successfully",
         "config_path": config_path.to_string_lossy(),
         "backup_path": config_path.with_extension("json.backup").to_string_lossy(),
         "env_vars": config.env_vars,
+        "shell_config_path": shell_config_path,
+        "note": "Please run 'source ~/.bashrc' (or ~/.zshrc) to apply environment variables",
     })))
+}
+
+/// 获取 shell 配置文件路径
+fn get_shell_config_path() -> String {
+    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string());
+    let home = dirs::home_dir()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_else(|| "~".to_string());
+
+    if shell.contains("zsh") {
+        format!("{}/.zshrc", home)
+    } else {
+        format!("{}/.bashrc", home)
+    }
+}
+
+/// 将环境变量写入 shell 配置文件
+fn write_env_vars_to_shell_config(env_vars: &[(String, String)]) -> anyhow::Result<()> {
+    use std::io::Write;
+
+    // 检测当前 shell
+    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string());
+    let home = dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Failed to get home directory"))?;
+
+    // 根据 shell 类型选择配置文件
+    let shell_config_path = if shell.contains("zsh") {
+        home.join(".zshrc")
+    } else if shell.contains("bash") {
+        home.join(".bashrc")
+    } else {
+        // 默认使用 .bashrc
+        home.join(".bashrc")
+    };
+
+    // 读取现有配置内容
+    let existing_content = std::fs::read_to_string(&shell_config_path).unwrap_or_default();
+
+    // 准备要添加的环境变量内容
+    let mut env_vars_content = String::new();
+    env_vars_content.push_str("\n# AI Gateway Hub - Environment Variables\n");
+    env_vars_content.push_str("# Added automatically by AI Gateway Hub\n");
+
+    for (key, value) in env_vars {
+        // 检查该环境变量是否已存在（避免重复添加）
+        let pattern = format!("export {}=", key);
+        if !existing_content.contains(&pattern) {
+            env_vars_content.push_str(&format!("export {}={}\n", key, value));
+        } else {
+            // 如果已存在，更新它
+            tracing::info!("Env var {} already exists in shell config, skipping", key);
+        }
+    }
+
+    // 追加到配置文件
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&shell_config_path)?;
+
+    file.write_all(env_vars_content.as_bytes())?;
+
+    tracing::info!(
+        "Environment variables written to shell config: {}",
+        shell_config_path.display()
+    );
+
+    Ok(())
 }
 
 /// 跳过 Claude Code 登录引导
