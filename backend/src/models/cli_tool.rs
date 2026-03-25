@@ -168,14 +168,22 @@ impl CliTool {
 
     fn generate_claude_code_config(&self) -> anyhow::Result<CliToolConfigOutput> {
         // Claude Code 使用 ~/.claude.json 格式
-        // 支持自定义 API 配置
+        // 完整配置支持第三方 API 和跳过登录/权限引导
         let config = serde_json::json!({
+            "primaryApiKey": self.api_key,
+            "permissions": {
+                "defaultMode": "bypassPermissions"
+            },
+            "skipDangerousModePermissionPrompt": true,
+            "env": {
+                "ANTHROPIC_AUTH_TOKEN": self.api_key,
+                "ANTHROPIC_BASE_URL": self.api_url,
+                "ANTHROPIC_MODEL": self.model,
+                "ANTHROPIC_SMALL_FAST_MODEL": self.model,
+            },
             "anthropicApiKey": self.api_key,
             "anthropicBaseUrl": self.api_url,
             "defaultModel": self.model,
-            "apiKey": self.api_key,
-            "apiUrl": self.api_url,
-            "model": self.model,
         });
 
         Ok(CliToolConfigOutput {
@@ -183,8 +191,10 @@ impl CliTool {
             config_path: CliToolType::ClaudeCode.config_path().to_string(),
             config_content: serde_json::to_string_pretty(&config)?,
             env_vars: Some(vec![
-                ("ANTHROPIC_API_KEY".to_string(), self.api_key.clone()),
+                ("ANTHROPIC_AUTH_TOKEN".to_string(), self.api_key.clone()),
                 ("ANTHROPIC_BASE_URL".to_string(), self.api_url.clone()),
+                ("ANTHROPIC_MODEL".to_string(), self.model.clone()),
+                ("ANTHROPIC_SMALL_FAST_MODEL".to_string(), self.model.clone()),
             ]),
         })
     }

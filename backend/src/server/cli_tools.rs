@@ -678,8 +678,19 @@ fn write_env_vars_to_shell_config(env_vars: &[(String, String)]) -> anyhow::Resu
 async fn skip_claude_onboarding() -> Json<ApiResponse<serde_json::Value>> {
     use std::collections::HashMap;
 
-    // 固定使用 ~/.claude.json 路径（Docker 挂载到宿主机）
-    let config_path = PathBuf::from("/root/.claude.json");
+    // 使用跨平台的配置文件路径
+    let config_path = get_claude_config_path();
+
+    // 确保父目录存在
+    if let Some(parent) = config_path.parent() {
+        if let Err(e) = std::fs::create_dir_all(parent) {
+            return Json(ApiResponse::error(format!(
+                "Failed to create directory {}: {}",
+                parent.display(),
+                e
+            )));
+        }
+    }
 
     // 读取现有配置（如果存在）
     let mut config: HashMap<String, serde_json::Value> = match std::fs::read_to_string(&config_path) {
