@@ -1,0 +1,7 @@
+/Users/it/ai-gateway/backend/target/debug/deps/potential_utf-2bc2fd1b980de449.d: /Users/it/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/potential_utf-0.1.4/src/lib.rs /Users/it/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/potential_utf-0.1.4/src/uchar.rs /Users/it/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/potential_utf-0.1.4/src/ustr.rs
+
+/Users/it/ai-gateway/backend/target/debug/deps/libpotential_utf-2bc2fd1b980de449.rmeta: /Users/it/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/potential_utf-0.1.4/src/lib.rs /Users/it/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/potential_utf-0.1.4/src/uchar.rs /Users/it/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/potential_utf-0.1.4/src/ustr.rs
+
+/Users/it/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/potential_utf-0.1.4/src/lib.rs:
+/Users/it/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/potential_utf-0.1.4/src/uchar.rs:
+/Users/it/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/potential_utf-0.1.4/src/ustr.rs:

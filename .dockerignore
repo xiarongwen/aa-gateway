@@ -1,0 +1,42 @@
+# Git
+.git
+.gitignore
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+*~
+
+# Rust
+backend/target
+backend/Cargo.lock
+**/*.rs.bk
+
+# Node.js
+frontend/node_modules
+frontend/dist
+frontend/.vite
+
+# Docker
+docker-compose*.yml
+Dockerfile*
+.dockerignore
+
+# Data
+data/
+*.db
+*.db-journal
+
+# Documentation
+*.md
+docs/
+
+# Testing
+**/coverage/
+**/.nyc_output/
+
+# OS
+.DS_Store
+Thumbs.db

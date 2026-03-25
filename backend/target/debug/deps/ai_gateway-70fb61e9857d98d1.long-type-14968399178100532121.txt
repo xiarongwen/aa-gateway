@@ -1,0 +1,2 @@
+fn(axum::extract::State<std::sync::Arc<database::Database>>) -> impl std::future::Future<Output = Json<ApiResponse<()>>> {stop_proxy}
+fn(axum::extract::State<std::sync::Arc<database::Database>>) -> impl std::future::Future<Output = Json<ApiResponse<()>>> {stop_proxy}: Handler<_, _>

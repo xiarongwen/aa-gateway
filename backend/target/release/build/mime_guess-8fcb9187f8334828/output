@@ -1,0 +1,1 @@
+cargo:rustc-env=MIME_TYPES_GENERATED_PATH=/Users/it/ai-gateway/backend/target/release/build/mime_guess-8fcb9187f8334828/out/mime_types_generated.rs

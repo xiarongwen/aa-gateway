@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  ai-gateway-hub:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ai-gateway-hub
+    ports:
+      - "8677:8080"
+    volumes:
+      - ai-gateway-data:/root/.local/share/ai-gateway
+      # 挂载 CLI 工具配置目录，用于修改本地配置
+      - ~/.claude:/root/.claude
+      - ~/.codex:/root/.codex
+      - ~/.gemini:/root/.gemini
+      - ~/.opencode:/root/.opencode
+      - ~/.openclaw:/root/.openclaw
+    environment:
+      - PORT=8080
+      - ENABLE_PROXY=true
+      - PROXY_PORT=9090
+      - RUST_LOG=info
+    restart: unless-stopped
+
+volumes:
+  ai-gateway-data:
+    driver: local
