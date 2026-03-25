@@ -23,6 +23,7 @@ pub fn cli_tool_routes() -> Router<Arc<Database>> {
         .route("/:id/backup", post(backup_cli_tool_config))
         .route("/:id/restore", post(restore_cli_tool_backup))
         .route("/types", get(list_cli_tool_types))
+        .route("/skip-onboarding", post(skip_claude_onboarding))
 }
 
 /// 获取 CLI 工具配置列表
@@ -592,4 +593,81 @@ async fn apply_cli_tool_config(
         "backup_path": config_path.with_extension("json.backup").to_string_lossy(),
         "env_vars": config.env_vars,
     })))
+}
+
+/// 跳过 Claude Code 登录引导
+async fn skip_claude_onboarding() -> Json<ApiResponse<serde_json::Value>> {
+    use std::collections::HashMap;
+
+    // 检测操作系统并获取配置文件路径
+    let config_path = get_claude_config_path();
+
+    // 读取现有配置（如果存在）
+    let mut config: HashMap<String, serde_json::Value> = match std::fs::read_to_string(&config_path) {
+        Ok(content) => {
+            serde_json::from_str(&content).unwrap_or_default()
+        }
+        Err(_) => HashMap::new(),
+    };
+
+    // 设置 hasCompletedOnboarding 为 true
+    config.insert("hasCompletedOnboarding".to_string(), serde_json::json!(true));
+
+    // 确保目录存在
+    if let Some(parent) = config_path.parent() {
+        if let Err(e) = std::fs::create_dir_all(parent) {
+            return Json(ApiResponse::error(format!(
+                "Failed to create directory {}: {}",
+                parent.display(),
+                e
+            )));
+        }
+    }
+
+    // 写入配置文件
+    let config_content = match serde_json::to_string_pretty(&config) {
+        Ok(content) => content,
+        Err(e) => return Json(ApiResponse::error(format!("Failed to serialize config: {}", e))),
+    };
+
+    if let Err(e) = std::fs::write(&config_path, config_content) {
+        return Json(ApiResponse::error(format!(
+            "Failed to write config to {}: {}",
+            config_path.display(),
+            e
+        )));
+    }
+
+    Json(ApiResponse::success(serde_json::json!({
+        "message": "Claude Code onboarding skipped successfully",
+        "config_path": config_path.to_string_lossy(),
+        "os": std::env::consts::OS,
+    })))
+}
+
+/// 获取 Claude Code 配置文件路径（根据操作系统）
+fn get_claude_config_path() -> PathBuf {
+    let home_dir = dirs::home_dir().expect("Failed to get home directory");
+
+    match std::env::consts::OS {
+        "windows" => {
+            // Windows: %APPDATA%\Claude\settings.json
+            let app_data = std::env::var("APPDATA")
+                .map(PathBuf::from)
+                .unwrap_or_else(|_| home_dir.join("AppData").join("Roaming"));
+            app_data.join("Claude").join("settings.json")
+        }
+        "macos" => {
+            // macOS: ~/Library/Application Support/Claude/settings.json
+            home_dir
+                .join("Library")
+                .join("Application Support")
+                .join("Claude")
+                .join("settings.json")
+        }
+        _ => {
+            // Linux 和其他系统: ~/.claude.json
+            home_dir.join(".claude.json")
+        }
+    }
 }

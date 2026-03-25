@@ -96,4 +96,12 @@ export const cliToolsApi = {
       config_path: string
       backup_path: string
     }>>(`/cli-tools/${id}/restore`),
+
+  // 跳过 Claude Code 登录引导
+  skipOnboarding: () =>
+    apiClient.post<ApiResponse<{
+      message: string
+      config_path: string
+      os: string
+    }>>('/cli-tools/skip-onboarding'),
 }

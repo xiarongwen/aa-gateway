@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Pencil, Trash2, Terminal, Download, CheckCircle, FileCode, Loader2, Copy, Undo2 } from 'lucide-react'
+import { Plus, Pencil, Trash2, Terminal, Download, CheckCircle, FileCode, Loader2, Copy, Undo2, Zap } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { cliToolsApi, type CliTool, type CliToolType, type CreateCliToolRequest, type CliToolConfigOutput } from '../api/cliTools'
 import { providersApi, type Provider } from '../api/providers'
@@ -558,6 +558,19 @@ export default function CliTools() {
     },
   })
 
+  // 跳过 Claude Code 登录引导
+  const skipOnboardingMutation = useMutation({
+    mutationFn: cliToolsApi.skipOnboarding,
+    onSuccess: (data) => {
+      const result = (data as unknown as { data?: { message: string; config_path: string; os: string } }).data
+      toast.success(result?.message || 'Claude Code onboarding skipped')
+      toast.success(`Config path: ${result?.config_path} (${result?.os})`)
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to skip onboarding')
+    },
+  })
+
   const handleCreate = (data: CreateCliToolRequest) => {
     createMutation.mutate(data)
   }
@@ -595,13 +608,24 @@ export default function CliTools() {
             Manage CLI tool configurations for Claude Code, Codex, Gemini CLI, and more
           </p>
         </div>
-        <button
-          onClick={() => setIsCreateModalOpen(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
-        >
-          <Plus className="w-4 h-4" />
-          Add Configuration
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => skipOnboardingMutation.mutate()}
+            disabled={skipOnboardingMutation.isPending}
+            className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700 disabled:opacity-50"
+            title="Skip Claude Code login - set hasCompletedOnboarding to true"
+          >
+            {skipOnboardingMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+            Skip Claude Login
+          </button>
+          <button
+            onClick={() => setIsCreateModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+          >
+            <Plus className="w-4 h-4" />
+            Add Configuration
+          </button>
+        </div>
       </div>
 
       {/* Tools Grid */}
