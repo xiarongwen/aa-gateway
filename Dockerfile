@@ -21,7 +21,8 @@ RUN apk add --no-cache musl-dev openssl-dev sqlite-dev
 WORKDIR /app/backend
 
 # Copy Cargo files for caching
-COPY backend/Cargo.toml backend/Cargo.lock ./
+COPY backend/Cargo.toml ./
+COPY backend/Cargo.lock* ./
 
 # Copy source code
 COPY backend/src ./src
