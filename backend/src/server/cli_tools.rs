@@ -678,8 +678,8 @@ fn write_env_vars_to_shell_config(env_vars: &[(String, String)]) -> anyhow::Resu
 async fn skip_claude_onboarding() -> Json<ApiResponse<serde_json::Value>> {
     use std::collections::HashMap;
 
-    // 检测操作系统并获取配置文件路径
-    let config_path = get_claude_config_path();
+    // 固定使用 ~/.claude.json 路径（Docker 挂载到宿主机）
+    let config_path = PathBuf::from("/root/.claude.json");
 
     // 读取现有配置（如果存在）
     let mut config: HashMap<String, serde_json::Value> = match std::fs::read_to_string(&config_path) {
@@ -692,36 +692,30 @@ async fn skip_claude_onboarding() -> Json<ApiResponse<serde_json::Value>> {
     // 设置 hasCompletedOnboarding 为 true
     config.insert("hasCompletedOnboarding".to_string(), serde_json::json!(true));
 
-    // 确保目录存在
-    if let Some(parent) = config_path.parent() {
-        if let Err(e) = std::fs::create_dir_all(parent) {
-            return Json(ApiResponse::error(format!(
-                "Failed to create directory {}: {}",
-                parent.display(),
-                e
-            )));
-        }
-    }
-
     // 写入配置文件
     let config_content = match serde_json::to_string_pretty(&config) {
         Ok(content) => content,
         Err(e) => return Json(ApiResponse::error(format!("Failed to serialize config: {}", e))),
     };
 
-    if let Err(e) = std::fs::write(&config_path, config_content) {
-        return Json(ApiResponse::error(format!(
-            "Failed to write config to {}: {}",
-            config_path.display(),
-            e
-        )));
+    match std::fs::write(&config_path, config_content) {
+        Ok(_) => {
+            tracing::info!("Successfully wrote hasCompletedOnboarding to {:?}", config_path);
+            Json(ApiResponse::success(serde_json::json!({
+                "message": "Claude Code onboarding skipped successfully",
+                "config_path": config_path.to_string_lossy(),
+                "os": std::env::consts::OS,
+            })))
+        }
+        Err(e) => {
+            tracing::error!("Failed to write config: {}", e);
+            Json(ApiResponse::error(format!(
+                "Failed to write config to {}: {}",
+                config_path.display(),
+                e
+            )))
+        }
     }
-
-    Json(ApiResponse::success(serde_json::json!({
-        "message": "Claude Code onboarding skipped successfully",
-        "config_path": config_path.to_string_lossy(),
-        "os": std::env::consts::OS,
-    })))
 }
 
 /// 获取 Claude Code 配置文件路径（根据操作系统）
