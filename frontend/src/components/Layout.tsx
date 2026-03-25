@@ -1,5 +1,5 @@
 import { Link, NavLink } from 'react-router-dom'
-import { LayoutDashboard, Server, Puzzle, Terminal, Network, Settings } from 'lucide-react'
+import { Server, Terminal } from 'lucide-react'
 import { Outlet } from 'react-router-dom'
 
 const navigation = [
