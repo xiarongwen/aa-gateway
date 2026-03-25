@@ -13,7 +13,7 @@ COPY frontend/ ./
 RUN npm run build
 
 # Stage 2: Build backend
-FROM rust:1.85-slim-bookworm AS backend-builder
+FROM rust:latest AS backend-builder
 
 # Install required dependencies for building
 RUN apt-get update && apt-get install -y \
