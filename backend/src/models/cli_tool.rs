@@ -43,11 +43,19 @@ impl CliToolType {
 
     pub fn config_path(&self) -> &'static str {
         match self {
-            CliToolType::ClaudeCode => "~/.claude.json",
+            CliToolType::ClaudeCode => "~/.claude/settings.json",
             CliToolType::Codex => "~/.codex/config.json",
             CliToolType::GeminiCli => "~/.gemini/config.json",
             CliToolType::OpenCode => "~/.opencode/config.json",
             CliToolType::OpenClaw => "~/.openclaw/config.json",
+        }
+    }
+
+    /// 获取 Claude Code 的登录引导配置文件路径 (~/.claude.json)
+    pub fn onboarding_config_path(&self) -> Option<&'static str> {
+        match self {
+            CliToolType::ClaudeCode => Some("~/.claude.json"),
+            _ => None,
         }
     }
 }
@@ -167,22 +175,15 @@ impl CliTool {
     }
 
     fn generate_claude_code_config(&self) -> anyhow::Result<CliToolConfigOutput> {
-        // Claude Code 使用 ~/.claude.json 格式
-        // 完整配置支持第三方 API 和跳过登录/权限引导
+        // Claude Code 使用 ~/.claude/settings.json 格式
+        // cc-switch 风格：只包含 env 字段
         let config = serde_json::json!({
-            "primaryApiKey": self.api_key,
-            "anthropicBaseUrl": self.api_url,
-            "defaultModel": self.model,
             "env": {
                 "ANTHROPIC_AUTH_TOKEN": self.api_key,
                 "ANTHROPIC_BASE_URL": self.api_url,
                 "ANTHROPIC_MODEL": self.model,
                 "ANTHROPIC_SMALL_FAST_MODEL": self.model,
             },
-            "permissions": {
-                "defaultMode": "bypassPermissions"
-            },
-            "skipDangerousModePermissionPrompt": true,
         });
 
         Ok(CliToolConfigOutput {

@@ -7,10 +7,66 @@ use axum::{
 };
 use std::sync::Arc;
 use std::path::PathBuf;
+use std::io::Write;
 
 use crate::database::Database;
 use crate::models::cli_tool::*;
 use crate::models::{ApiResponse, PaginationParams, PaginatedResponse};
+
+/// 原子写入文件（防止写入过程中断导致文件损坏）
+fn atomic_write_file(path: &std::path::Path, content: &str) -> std::io::Result<()> {
+    // 1. 确保父目录存在
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+
+    // 2. 创建临时文件路径
+    let tmp_path = path.with_extension(format!("tmp.{}", std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos()));
+
+    // 3. 写入临时文件
+    {
+        let mut tmp_file = std::fs::OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(&tmp_path)?;
+        tmp_file.write_all(content.as_bytes())?;
+        tmp_file.flush()?;
+    }
+
+    // 4. Unix 系统：继承原文件权限
+    #[cfg(unix)]
+    if path.exists() {
+        if let Ok(metadata) = std::fs::metadata(path) {
+            let _ = std::fs::set_permissions(&tmp_path, metadata.permissions());
+        }
+    }
+
+    // 5. 原子重命名
+    #[cfg(windows)]
+    {
+        // Windows: 如果目标文件存在，需要先删除
+        let _ = std::fs::remove_file(path);
+    }
+    std::fs::rename(tmp_path, path)?;
+
+    Ok(())
+}
+
+/// 获取 Claude Code 的 onboarding 配置文件路径（~/.claude.json）
+fn get_claude_onboarding_path() -> PathBuf {
+    let home_dir = dirs::home_dir().expect("Failed to get home directory");
+    home_dir.join(".claude.json")
+}
+
+/// 获取 Claude Code 的 settings 配置文件路径（~/.claude/settings.json）
+fn get_claude_settings_path() -> PathBuf {
+    let home_dir = dirs::home_dir().expect("Failed to get home directory");
+    home_dir.join(".claude").join("settings.json")
+}
 
 /// CLI 工具路由
 pub fn cli_tool_routes() -> Router<Arc<Database>> {
@@ -349,7 +405,8 @@ async fn list_cli_tool_types() -> Json<ApiResponse<Vec<serde_json::Value>>> {
             "id": "claude_code",
             "name": "Claude Code",
             "description": "Claude Code CLI - Anthropic's AI coding assistant",
-            "config_path": "~/.claude.json"
+            "config_path": "~/.claude/settings.json",
+            "onboarding_path": "~/.claude.json"
         }),
         serde_json::json!({
             "id": "codex",
@@ -562,13 +619,31 @@ async fn apply_cli_tool_config(
         }
     }
 
-    // 写入配置文件
-    if let Err(e) = std::fs::write(&config_path, &config.config_content) {
+    // 写入配置文件（使用原子写入防止文件损坏）
+    if let Err(e) = atomic_write_file(&config_path, &config.config_content) {
         return Json(ApiResponse::error(format!(
             "Failed to write config to {}: {}",
             config_path.display(),
             e
         )));
+    }
+
+    // 对于 Claude Code，同时设置 onboarding 标记（~/.claude.json）
+    if tool.tool_type == "claude_code" {
+        let onboarding_path = get_claude_onboarding_path();
+        let mut onboarding_config: serde_json::Map<String, serde_json::Value> =
+            match std::fs::read_to_string(&onboarding_path) {
+                Ok(content) => serde_json::from_str(&content).unwrap_or_default(),
+                Err(_) => serde_json::Map::new(),
+            };
+
+        if onboarding_config.get("hasCompletedOnboarding") != Some(&serde_json::json!(true)) {
+            onboarding_config.insert("hasCompletedOnboarding".to_string(), serde_json::json!(true));
+            if let Ok(content) = serde_json::to_string_pretty(&onboarding_config) {
+                let _ = atomic_write_file(&onboarding_path, &content);
+                tracing::info!("Auto-set hasCompletedOnboarding for Claude Code");
+            }
+        }
     }
 
     // 写入环境变量到 shell 配置文件
@@ -675,41 +750,38 @@ fn write_env_vars_to_shell_config(env_vars: &[(String, String)]) -> anyhow::Resu
 }
 
 /// 跳过 Claude Code 登录引导
+/// 按照 cc-switch 方式：只写入 ~/.claude.json，不包含 API 配置
 async fn skip_claude_onboarding() -> Json<ApiResponse<serde_json::Value>> {
-    use std::collections::HashMap;
-
-    // 使用跨平台的配置文件路径
-    let config_path = get_claude_config_path();
-
-    // 确保父目录存在
-    if let Some(parent) = config_path.parent() {
-        if let Err(e) = std::fs::create_dir_all(parent) {
-            return Json(ApiResponse::error(format!(
-                "Failed to create directory {}: {}",
-                parent.display(),
-                e
-            )));
-        }
-    }
+    // 获取 onboarding 配置文件路径（~/.claude.json）
+    let config_path = get_claude_onboarding_path();
 
     // 读取现有配置（如果存在）
-    let mut config: HashMap<String, serde_json::Value> = match std::fs::read_to_string(&config_path) {
-        Ok(content) => {
-            serde_json::from_str(&content).unwrap_or_default()
-        }
-        Err(_) => HashMap::new(),
-    };
+    let mut config: serde_json::Map<String, serde_json::Value> =
+        match std::fs::read_to_string(&config_path) {
+            Ok(content) => serde_json::from_str(&content).unwrap_or_default(),
+            Err(_) => serde_json::Map::new(),
+        };
+
+    // 检查是否已经设置
+    if config.get("hasCompletedOnboarding") == Some(&serde_json::json!(true)) {
+        return Json(ApiResponse::success(serde_json::json!({
+            "message": "Claude Code onboarding already skipped",
+            "config_path": config_path.to_string_lossy(),
+            "os": std::env::consts::OS,
+        })));
+    }
 
     // 设置 hasCompletedOnboarding 为 true
     config.insert("hasCompletedOnboarding".to_string(), serde_json::json!(true));
 
-    // 写入配置文件
+    // 序列化配置
     let config_content = match serde_json::to_string_pretty(&config) {
         Ok(content) => content,
         Err(e) => return Json(ApiResponse::error(format!("Failed to serialize config: {}", e))),
     };
 
-    match std::fs::write(&config_path, config_content) {
+    // 使用原子写入
+    match atomic_write_file(&config_path, &config_content) {
         Ok(_) => {
             tracing::info!("Successfully wrote hasCompletedOnboarding to {:?}", config_path);
             Json(ApiResponse::success(serde_json::json!({
@@ -729,29 +801,3 @@ async fn skip_claude_onboarding() -> Json<ApiResponse<serde_json::Value>> {
     }
 }
 
-/// 获取 Claude Code 配置文件路径（根据操作系统）
-fn get_claude_config_path() -> PathBuf {
-    let home_dir = dirs::home_dir().expect("Failed to get home directory");
-
-    match std::env::consts::OS {
-        "windows" => {
-            // Windows: %APPDATA%\Claude\settings.json
-            let app_data = std::env::var("APPDATA")
-                .map(PathBuf::from)
-                .unwrap_or_else(|_| home_dir.join("AppData").join("Roaming"));
-            app_data.join("Claude").join("settings.json")
-        }
-        "macos" => {
-            // macOS: ~/Library/Application Support/Claude/settings.json
-            home_dir
-                .join("Library")
-                .join("Application Support")
-                .join("Claude")
-                .join("settings.json")
-        }
-        _ => {
-            // Linux 和其他系统: ~/.claude.json
-            home_dir.join(".claude.json")
-        }
-    }
-}
