@@ -40,12 +40,17 @@ pub async fn create_app(db: Arc<Database>) -> anyhow::Result<Router> {
         }
     });
 
+    // 先创建带状态的路由
+    let api_router = api_routes().with_state(db.clone());
+
+    // 静态文件服务
+    let static_service = ServeDir::new(&static_dir)
+        .append_index_html_on_directories(true);
+
     let app = Router::new()
-        .merge(api_routes())
-        // 提供静态文件服务（如果目录存在）
-        .nest_service("/", ServeDir::new(&static_dir).fallback(
-            ServeDir::new(&static_dir).append_index_html_on_directories(true)
-        ))
+        .nest("/api", api_router)
+        .route("/health", get(health_check))
+        .fallback_service(static_service)
         .layer(cors)
         .with_state(db);
 
@@ -55,12 +60,10 @@ pub async fn create_app(db: Arc<Database>) -> anyhow::Result<Router> {
 /// API 路由
 fn api_routes() -> Router<Arc<Database>> {
     Router::new()
-        .route("/health", get(health_check))
-        .route("/", get(index))
-        .nest("/api/providers", provider_routes())
-        .nest("/api/mcp", mcp_routes())
-        .nest("/api/proxy", proxy_routes())
-        .nest("/api/cli-tools", cli_tool_routes())
+        .nest("/providers", provider_routes())
+        .nest("/mcp", mcp_routes())
+        .nest("/proxy", proxy_routes())
+        .nest("/cli-tools", cli_tool_routes())
 }
 
 async fn health_check() -> (StatusCode, Json<serde_json::Value>) {
@@ -74,6 +77,3 @@ async fn health_check() -> (StatusCode, Json<serde_json::Value>) {
     )
 }
 
-async fn index() -> &'static str {
-    "AI Gateway - Server-side AI API management tool\nAPI Documentation: /api/docs (coming soon)"
-}
