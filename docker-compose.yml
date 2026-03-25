@@ -8,8 +8,9 @@ services:
       - "8677:8080"
     volumes:
       - ai-gateway-data:/root/.local/share/ai-gateway
-      # 挂载 CLI 工具配置目录，用于修改本地配置
+      # 挂载 CLI 工具配置目录/文件，用于修改本地配置
       - ~/.claude:/root/.claude
+      - ~/.claude.json:/root/.claude.json
       - ~/.codex:/root/.codex
       - ~/.gemini:/root/.gemini
       - ~/.opencode:/root/.opencode
