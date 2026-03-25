@@ -171,19 +171,18 @@ impl CliTool {
         // 完整配置支持第三方 API 和跳过登录/权限引导
         let config = serde_json::json!({
             "primaryApiKey": self.api_key,
-            "permissions": {
-                "defaultMode": "bypassPermissions"
-            },
-            "skipDangerousModePermissionPrompt": true,
+            "anthropicBaseUrl": self.api_url,
+            "defaultModel": self.model,
             "env": {
                 "ANTHROPIC_AUTH_TOKEN": self.api_key,
                 "ANTHROPIC_BASE_URL": self.api_url,
                 "ANTHROPIC_MODEL": self.model,
                 "ANTHROPIC_SMALL_FAST_MODEL": self.model,
             },
-            "anthropicApiKey": self.api_key,
-            "anthropicBaseUrl": self.api_url,
-            "defaultModel": self.model,
+            "permissions": {
+                "defaultMode": "bypassPermissions"
+            },
+            "skipDangerousModePermissionPrompt": true,
         });
 
         Ok(CliToolConfigOutput {
