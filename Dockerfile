@@ -13,10 +13,14 @@ COPY frontend/ ./
 RUN npm run build
 
 # Stage 2: Build backend
-FROM rust:1.75-alpine AS backend-builder
+FROM rust:1.75-slim-bookworm AS backend-builder
 
 # Install required dependencies for building
-RUN apk add --no-cache musl-dev openssl-dev sqlite-dev
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    libsqlite3-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app/backend
 
@@ -31,13 +35,14 @@ COPY backend/src ./src
 RUN cargo build --release
 
 # Stage 3: Final runtime image
-FROM alpine:3.19
+FROM debian:bookworm-slim
 
 # Install runtime dependencies
-RUN apk add --no-cache \
+RUN apt-get update && apt-get install -y \
     ca-certificates \
-    sqlite-libs \
-    libgcc
+    libsqlite3-0 \
+    libssl3 \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
